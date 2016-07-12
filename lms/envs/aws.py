@@ -749,3 +749,9 @@ MICROSITE_ROOT_DIR = path(ENV_TOKENS.get('MICROSITE_ROOT_DIR', ''))
 # Cutoff date for granting audit certificates
 if ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE', None):
     AUDIT_CERT_CUTOFF_DATE = dateutil.parser.parse(ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE'))
+
+# SECO Authentication settings
+SECO_AUTHENTICATION = {}
+ENV_SECO = ENV_TOKENS.get('SECO_AUTHENTICATION', {})
+for seco, value in ENV_SECO.items():
+    SECO_AUTHENTICATION[seco] = value

@@ -24,8 +24,9 @@ from django.core import mail
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.core.validators import validate_email, ValidationError
 from django.db import IntegrityError, transaction
-from django.http import (HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
-                         HttpResponseServerError, Http404)
+from django.http import (HttpResponse, HttpResponseBadRequest,
+                         HttpResponseForbidden, HttpResponseServerError,
+                         Http404)
 from django.shortcuts import redirect
 from django.utils.encoding import force_bytes, force_text
 from django.utils.translation import ungettext
@@ -72,6 +73,7 @@ from xmodule.modulestore import ModuleStoreEnum
 
 from collections import namedtuple
 
+from common.seco_middleware import SecoApiMiddleware
 from courseware.courses import get_courses, sort_by_announcement, sort_by_start_date  # pylint: disable=import-error
 from courseware.access import has_access
 
@@ -126,7 +128,6 @@ from notification_prefs.views import enable_notifications
 # Note that this lives in openedx, so this dependency should be refactored.
 from openedx.core.djangoapps.user_api.preferences import api as preferences_api
 from openedx.core.djangoapps.programs.utils import get_programs_for_dashboard
-
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -2342,3 +2343,249 @@ def _get_course_programs(user, user_enrolled_courses):  # pylint: disable=invali
                 log.warning('Program structure is invalid, skipping display: %r', program)
 
     return programs_data
+
+
+# login implementation for jio user
+@ensure_csrf_cookie
+def login_jio_user(request, error="", app_type="LMS"):  # pylint: disable=too-many-statements,unused-argument
+    """AJAX request to log in the user."""
+    redirect_url = None
+    response = None
+    user = None
+
+    # Validates the request object for mandatory keys.
+    if 'jioid' not in request.POST or 'password' not in request.POST:
+        return JsonResponse({
+            "success": False,
+            # TODO: User error message
+            "value": _('There was an error receiving your login information. Please email us.'),
+        })  # TODO: this should be status code 400
+
+    jioid = request.POST['jioid'].strip()
+    password = request.POST['password'].strip()
+
+    # Validates user submitted for values.
+    if not jioid or not password:
+        return JsonResponse({
+            "success": False,
+            "value": _('Please check your login credentials.'),
+        })
+
+    form_data = {'identifier': jioid, 'password': password}
+    idam_verify_response, status_code = SecoApiMiddleware.verify(form_data, 'verify')
+    if 'error_info' in idam_verify_response:
+        return JsonResponse(idam_verify_response.get('error_info'))  # return error details
+
+    password = pipeline.make_random_password()  # Hack to allow login. random password is made for authenticating user.
+    sso_token = idam_verify_response['ssoToken']
+    try:
+        user = User.objects.get(username=jioid)  # jioedu --- user object is fetched on the basis of jioid insted of email.
+        if app_type == 'CMS' and not user.is_staff:
+            unauthorization_message = _('You are not authorized to login into Jio Education studio.')
+            return JsonResponse({
+                "success": False,
+                "value": unauthorization_message,
+            })  # TODO: this should be status code 400  # pylint: disable=fixme
+        user.set_password(password)
+        user.save(update_fields=['password'])
+
+    except User.DoesNotExist:
+        if settings.FEATURES['SQUELCH_PII_IN_LOGS']:
+            log.warning(u"Login failed - Unknown user jioid")
+        else:
+            log.warning(u"Login failed - Unknown user jioid: {0}".format(jioid))
+
+        idam_user_details, status_code = SecoApiMiddleware.session_get(sso_token, 'session_get')
+        if 'error_info' in idam_user_details:
+            return JsonResponse(idam_user_details.get('error_info'))  # return error details
+
+        if 'sessionAttributes' in idam_user_details:
+            if app_type == 'LMS':  # if lms login
+                idam_user_details['sessionAttributes']['user']['password'] = password
+                context = render_jio_lms_registration(request, idam_user_details)
+                return render_to_response('student_account/login_and_register.html', context)
+            elif app_type == 'CMS':  # if CMS login
+                return render_jio_cms_registration(request, idam_user_details)
+            else:
+                return JsonResponse({
+                    "success": False,
+                    "value": _('There was an error receiving your login information. Please email us.'),
+                })
+
+    # see if account has been locked out due to excessive login failures
+    user_found_by_jioid_lookup = user
+    if user_found_by_jioid_lookup and LoginFailures.is_feature_enabled():
+        if LoginFailures.is_user_locked_out(user_found_by_jioid_lookup):
+            lockout_message = _('This account has been temporarily locked due '
+                                'to excessive login failures. Try again later.')
+            return JsonResponse({
+                "success": False,
+                "value": lockout_message,
+            })  # TODO: this should be status code 429  # pylint: disable=fixme
+
+    # see if the user must reset his/her password due to any policy settings
+    if user_found_by_jioid_lookup and PasswordHistory.should_user_reset_password_now(user_found_by_jioid_lookup):
+        return JsonResponse({
+            "success": False,
+            "value": _('Your password has expired due to password policy on this account. You must '
+                       'reset your password before you can log in again. Please click the '
+                       '"Forgot Password" link on this page to reset your password before logging in again.'),
+        })  # TODO: this should be status code 403  # pylint: disable=fixme
+
+    # if the user doesn't exist, we want to set the username to an invalid
+    # username so that authentication is guaranteed to fail and we can take
+    # advantage of the ratelimited backend
+    if user:
+        username = user.username
+        email = user.email
+    else:
+        username = email = ""
+    try:
+        user = authenticate(username=username, password=password, request=request)
+    # this occurs when there are too many attempts from the same IP address
+    except RateLimitException:
+        return JsonResponse({
+            "success": False,
+            "value": _('Too many failed login attempts. Try again later.'),
+        })  # TODO: this should be status code 429  # pylint: disable=fixme
+
+    if user is None:
+        # tick the failed login counters if the user exists in the database
+        if user_found_by_jioid_lookup and LoginFailures.is_feature_enabled():
+            LoginFailures.increment_lockout_counter(user_found_by_jioid_lookup)
+
+        # if we didn't find this username earlier, the account for this email
+        # doesn't exist, and doesn't have a corresponding password
+        if username != "":
+            if settings.FEATURES['SQUELCH_PII_IN_LOGS']:
+                loggable_id = user_found_by_jioid_lookup.id if user_found_by_jioid_lookup else "<unknown>"
+                log.warning(u"Login failed - password for user.id: {0} is invalid".format(loggable_id))
+            else:
+                log.warning(u"Login failed - password for {0} is invalid".format(jioid))
+        return JsonResponse({
+            "success": False,
+            "value": _('JioID or password is incorrect.'),
+        })  # TODO: this should be status code 400  # pylint: disable=fixme
+
+    # successful login, clear failed login attempts counters, if applicable
+    if LoginFailures.is_feature_enabled():
+        LoginFailures.clear_lockout_counter(user)
+
+    # Track the user's sign in
+    if hasattr(settings, 'LMS_SEGMENT_KEY') and settings.LMS_SEGMENT_KEY:
+        tracking_context = tracker.get_tracker().resolve_context()
+        analytics.identify(user.id, {
+            'email': email,
+            'username': username
+        })
+
+        analytics.track(
+            user.id,
+            "edx.bi.user.account.authenticated",
+            {
+                'category': "conversion",
+                'label': request.POST.get('course_id'),
+                'provider': None
+            },
+            context={
+                'ip': tracking_context.get('ip'),
+                'Google Analytics': {
+                    'clientId': tracking_context.get('client_id')
+                }
+            }
+        )
+
+    if user is not None and user.is_active:
+        try:
+            # We do not log here, because we have a handler registered
+            # to perform logging on successful logins.
+            logging.critical("Entered try before logging method")
+            login(request, user)
+            logging.critical("After logging method")
+            if request.POST.get('remember') == 'true':
+                request.session.set_expiry(604800)
+                log.debug("Setting user session to never expire")
+            else:
+                request.session.set_expiry(0)
+        except Exception as exc:  # pylint: disable=broad-except
+            log.critical("Login failed - Could not create session. Is memcached running?")
+            log.exception(exc)
+            raise
+
+        redirect_url = None  # The AJAX method calling should know the default destination upon success
+
+        response = JsonResponse({
+            "success": True,
+            "redirect_url": redirect_url,
+        })
+
+        # Ensure that the external marketing site can
+        # detect that the user is logged in.
+        return set_logged_in_cookies(request, response, user)
+
+    if settings.FEATURES['SQUELCH_PII_IN_LOGS']:
+        log.warning(u"Login failed - Account not active for user.id: {0}, resending activation".format(user.id))
+    else:
+        log.warning(u"Login failed - Account not active for user {0}, resending activation".format(username))
+
+    reactivation_email_for_user(user)
+    not_activated_msg = _("This account has not been activated. We have sent another activation message. Please check your email for the activation instructions.")
+    return JsonResponse({
+        "success": False,
+        "value": not_activated_msg,
+    })  # TODO: this should be status code 400  # pylint: disable=fixme
+
+
+def render_jio_lms_registration(request, idam_user_details):
+    from student_account.views import _get_form_descriptions
+    user_data = idam_user_details['sessionAttributes']['user']
+    email = user_data['mail']
+    name = user_data['commonName']
+    username = user_data['uid']
+    password = user_data['password']
+    form_descriptions = _get_form_descriptions(request)
+    context = {
+        'data': {
+            'initial_mode': 'register',
+            'platform_name': settings.PLATFORM_NAME,
+            # Include form descriptions retrieved from the user API.
+            # We could have the JS client make these requests directly,
+            # but we include them in the initial page load to avoid
+            # the additional round-trip to the server.
+            #'login_form_desc': json.loads(form_descriptions['login']),
+            'registration_form_desc': json.loads(form_descriptions['registration']),
+            #'password_reset_form_desc': json.loads(form_descriptions['password_reset']),
+        },
+        'responsive': True,
+        'allow_iframing': True,
+        'disable_courseware_js': True,
+        'disable_footer': True,
+    }
+
+    registration_fields = ((context['data'])['registration_form_desc'])['fields']
+    (registration_fields[0])['defaultValue'] = email
+    (registration_fields[1])['defaultValue'] = name
+    (registration_fields[2])['defaultValue'] = username
+    (registration_fields[3])['type'] = "hidden"
+    (registration_fields[3])['label'] = None
+    (registration_fields[3])['required'] = False
+    (registration_fields[3])['defaultValue'] = password
+
+    return context
+
+
+def render_jio_cms_registration(request, idam_user_details):
+    name = idam_user_details['sessionAttributes']['user']['commonName']
+    email = idam_user_details['sessionAttributes']['user']['mail']
+    language = idam_user_details['sessionAttributes']['user']['preferredLocale']
+    public_username = idam_user_details['sessionAttributes']['user']['uid']
+    context = {'full_name': name, 'email': email,
+               'public_username': public_username,
+               'language': language}
+    # Store user details in session in order to populate it in register.html
+    request.session['user_profile'] = json.dumps(context)
+    return JsonResponse({
+                        "success": False,
+                         "show_signup": True,
+                        }
+    )

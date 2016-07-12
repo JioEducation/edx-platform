@@ -1,5 +1,6 @@
 """HTTP end-points for the User API. """
 import copy
+import logging
 from opaque_keys import InvalidKeyError
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -38,6 +39,7 @@ from .accounts import (
 from .accounts.api import check_account_exists
 from .serializers import UserSerializer, UserPreferenceSerializer
 
+log = logging.getLogger('edx.user_api')
 
 class LoginSessionView(APIView):
     """HTTP end-points for logging in users. """
@@ -895,3 +897,118 @@ class UpdateEmailOptInPreference(APIView):
         email_opt_in = request.data['email_opt_in'].lower() == 'true'
         update_email_opt_in(request.user, org, email_opt_in)
         return HttpResponse(status=status.HTTP_200_OK)
+
+
+class JioIDLoginSessionView(APIView):
+    """HTTP end-points for logging in users using Jio ID or registered Jio mobile number. """
+
+    authentication_classes = []
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+
+        """Return a description of the login form.
+
+        This decouples clients from the API definition:
+        if the API decides to modify the form, clients won't need
+        to be updated.
+
+        See `user_api.helpers.FormDescription` for examples
+        of the JSON-encoded form description.
+
+        Returns:
+            HttpResponse
+
+        """
+        form_desc = FormDescription("post", reverse("jio_id_login_session"))
+
+        # Translators: This label appears above a field on the login form
+        # meant to hold the user's Jio ID.
+        jio_label = _(u"Jio ID")
+
+        # Translators: This text is used as a placeholder in
+        # a field on the login form meant to hold the user's Jio ID.
+        jio_placeholder = _(u"Jio ID")
+
+        # Translators: These instructions appear on the login form, immediately
+        # below a field meant to hold the user's email address.
+        jio_instructions = _("Your Jio ID that is generated against your Jio mobile number")
+
+        #adding field for entering Jio ID.
+        form_desc.add_field(
+            "jioid",
+            field_type="text",
+            label=jio_label,
+            placeholder=jio_placeholder,
+            instructions=jio_instructions,
+            restrictions={
+                "min_length": 0,
+                "max_length": 255,
+            }
+        )
+
+        # Translators: This label appears above a field on the login form
+        # meant to hold the user's password.
+        password_label = _(u"Password")
+
+        # Translators: This text is used as a placeholder in
+        # a field on the login form meant to hold the user's Jio ID.
+        password_placeholder = _(u"Your Jio password")
+
+        #adding field for entering Jio password.
+        form_desc.add_field(
+            "password",
+            label=password_label,
+            field_type="password",
+            placeholder=password_placeholder,
+            restrictions={
+                "min_length": PASSWORD_MIN_LENGTH,
+                "max_length": PASSWORD_MAX_LENGTH,
+            }
+        )
+
+        #adding a checkbox for remember me.
+        form_desc.add_field(
+            "remember",
+            field_type="checkbox",
+            label=_("Remember me"),
+            default=False,
+            required=False,
+        )
+
+        return HttpResponse(form_desc.to_json(), content_type="application/json")
+
+    @method_decorator(require_post_params(["jioid", "password"]))
+    @method_decorator(csrf_protect)
+    def post(self, request):
+
+        """Log in a user.
+
+        You must send all required form fields with the request.
+
+        You can optionally send an `analytics` param with a JSON-encoded
+        object with additional info to include in the login analytics event.
+        Currently, the only supported field is "enroll_course_id" to indicate
+        that the user logged in while enrolling in a particular course.
+
+        Arguments:
+            request (HttpRequest)
+
+        Returns:
+            HttpResponse: 200 on success
+            HttpResponse: 400 if the request is not valid.
+            HttpResponse: 403 if authentication failed.
+            HttpResponse: 302 if redirecting to another page.
+
+        Example Usage:
+
+            POST /user_api/v1/login_session
+            with POST params `jioid`, `password`, and `remember`.
+
+            200 OK
+
+        """
+        # For the initial implementation, shim the existing login view
+        # from the student Django app.
+        from student.views import login_jio_user
+        return shim_student_view(login_jio_user, check_logged_in=True)(request)
