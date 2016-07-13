@@ -2614,9 +2614,9 @@ def send_email_after_enroll(user, course_id):
             settings.DEFAULT_FROM_EMAIL
         )
         user.email_user(subject, body, from_address)
-    except CourseOverview.DoesNotExit:
+    except CourseOverview.DoesNotExist:
         log.error(u"Course does not exit for user : %s and course id : %s", user, course_id)
-    except UserProfile.DoesNotExit:
+    except UserProfile.DoesNotExist:
         log.error(u"User Profile does not exit for user : %s", user)
     except Exception as exp:
         log.error("Unexpected error --------- %s", exp)
