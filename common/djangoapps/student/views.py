@@ -2349,8 +2349,6 @@ def _get_course_programs(user, user_enrolled_courses):  # pylint: disable=invali
 @ensure_csrf_cookie
 def login_jio_user(request, error="", app_type="LMS"):  # pylint: disable=too-many-statements,unused-argument
     """AJAX request to log in the user."""
-    redirect_url = None
-    response = None
     user = None
 
     # Validates the request object for mandatory keys.
@@ -2379,7 +2377,7 @@ def login_jio_user(request, error="", app_type="LMS"):  # pylint: disable=too-ma
     password = pipeline.make_random_password()  # Hack to allow login. random password is made for authenticating user.
     sso_token = idam_verify_response['ssoToken']
     try:
-        user = User.objects.get(username=jioid)  # jioedu --- user object is fetched on the basis of jioid insted of email.
+        user = User.objects.get(username=jioid)  # Fetch user object on the basis of jioid insted of email.
         if app_type == 'CMS' and not user.is_staff:
             unauthorization_message = _('You are not authorized to login into Jio Education studio.')
             return JsonResponse({
