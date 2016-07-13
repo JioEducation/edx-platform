@@ -1,6 +1,8 @@
 """
 Public views
 """
+import json
+
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.clickjacking import xframe_options_deny
 from django.core.context_processors import csrf
@@ -23,6 +25,16 @@ def signup(request):
     """
     Display the signup form.
     """
+    user_profile_context = {
+                            'full_name': '', 'email': '',
+                            'public_username': '',
+                            'language': ''
+                            }
+    if request.session.get('user_profile', False):
+        user_profile_context = json.loads(request.session.get('user_profile'))
+        del request.session['user_profile']
+        request.session.modified = True
+
     csrf_token = csrf(request)['csrf_token']
     if request.user.is_authenticated():
         return redirect('/course/')
@@ -31,7 +43,7 @@ def signup(request):
         # and registration is disabled.
         return redirect_with_get('login', request.GET, False)
 
-    return render_to_response('register.html', {'csrf': csrf_token})
+    return render_to_response('register.html', {'csrf': csrf_token, 'user_context': user_profile_context})
 
 
 @ssl_login_shortcut
@@ -41,6 +53,9 @@ def login_page(request):
     """
     Display the login form.
     """
+    if request.user.is_authenticated():
+        return redirect('/home/')
+
     csrf_token = csrf(request)['csrf_token']
     if (settings.FEATURES['AUTH_USE_CERTIFICATES'] and
             ssl_get_cert_from_request(request)):
@@ -62,6 +77,7 @@ def login_page(request):
             'csrf': csrf_token,
             'forgot_password_link': "//{base}/login#forgot-password-modal".format(base=settings.LMS_BASE),
             'platform_name': microsite.get_value('platform_name', settings.PLATFORM_NAME),
+            'seco_auth_required': bool(settings.SECO_AUTHENTICATION),
         }
     )
 

@@ -25,8 +25,13 @@ from django.utils.translation import ugettext as _
 
           <ol class="list-input">
             <li class="field text required" id="field-email">
-              <label for="email">${_("E-mail")}</label>
-              <input id="email" type="email" name="email" placeholder="${_('example: username@domain.com')}"/>
+              % if seco_auth_required:
+                <label for="jioid">${_("Jio ID")}</label>
+                <input id="jioid" type="text" name="jioid" placeholder="${_('')}"/>
+              % else:
+                <label for="email">${_("E-mail")}</label>
+                <input id="email" type="email" name="email" placeholder="${_('example: username@domain.com')}"/>
+	      % endif
             </li>
 
             <li class="field text required" id="field-password">

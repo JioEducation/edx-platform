@@ -31,27 +31,21 @@ from django.core.urlresolvers import reverse
             <li class="field text required" id="field-email">
               <label for="email">${_("E-mail")}</label>
               ## Translators: This is the placeholder text for a field that requests an email address.
-              <input id="email" type="email" name="email" placeholder="${_("example: username@domain.com")}" />
+              <input id="email" type="email" name="email" placeholder="${_("example: username@domain.com")}" value="${user_context['email']}" />
             </li>
 
             <li class="field text required" id="field-name">
               <label for="name">${_("Full Name")}</label>
               ## Translators: This is the placeholder text for a field that requests the user's full name.
-              <input id="name" type="text" name="name" placeholder="${_("example: Jane Doe")}" />
+              <input id="name" type="text" name="name" placeholder="${_("example: Jane Doe")}" value="${user_context['full_name']}" />
             </li>
 
             <li class="field text required" id="field-username">
               <label for="username">${_("Public Username")}</label>
               ## Translators: This is the placeholder text for a field that asks the user to pick a username
-              <input id="username" type="text" name="username" placeholder="${_("example: JaneDoe")}" />
+              <input id="username" type="text" name="username" placeholder="${_("example: JaneDoe")}" value="${user_context['public_username']}" />
               <span class="tip tip-stacked">${_("This will be used in public discussions with your courses and in our edX101 support forums")}</span>
             </li>
-
-            <li class="field text required" id="field-password">
-              <label for="password">${_("Password")}</label>
-              <input id="password" type="password" name="password" />
-            </li>
-
             <li class="field-group">
               <div class="field text" id="field-location">
                 <label for="location">${_("Your Location")}</label>
@@ -60,7 +54,7 @@ from django.core.urlresolvers import reverse
 
               <div class="field text" id="field-language">
                 <label for="language">${_("Preferred Language")}</label>
-                <input class="short" id="language" type="text" name="language" />
+                <input class="short" id="language" type="text" name="language" value="${user_context['language']}" />
               </div>
             </li>
 
@@ -79,6 +73,8 @@ from django.core.urlresolvers import reverse
 
         <!-- no honor code for CMS, but need it because we're using the lms student object -->
         <input name="honor_code" type="checkbox" value="true" checked="true" hidden="true">
+	<!-- required to identify lms/cms signup as both use the same views -->
+        <input name="cms_signup" type="checkbox" value="true" checked="true" hidden="true">
       </form>
     </article>
 
