@@ -370,3 +370,9 @@ PROCTORING_SETTINGS = ENV_TOKENS.get("PROCTORING_SETTINGS", PROCTORING_SETTINGS)
 
 # OpenID Connect issuer ID. Normally the URL of the authentication endpoint.
 OAUTH_OIDC_ISSUER = ENV_TOKENS['OAUTH_OIDC_ISSUER']
+
+#SECO Authentication settings
+SECO_AUTHENTICATION = {}
+ENV_SECO = ENV_TOKENS.get('SECO_AUTHENTICATION', {})
+for seco, value in ENV_SECO.items():
+    SECO_AUTHENTICATION[seco] = value

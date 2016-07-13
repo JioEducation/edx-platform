@@ -54,6 +54,10 @@ urlpatterns = patterns(
     url(r'^user_api/', include('openedx.core.djangoapps.user_api.legacy_urls')),
 )
 
+#conditional login on cms
+if settings.SECO_AUTHENTICATION.get('ENABLE_SECO_AUTHENTICATION', False):
+    urlpatterns += (url(r'^login_post$', 'student.views.login_jio_user', {'app_type': 'CMS'}, name='login_post'),)
+
 # User creation and updating views
 urlpatterns += patterns(
     '',
@@ -70,7 +74,8 @@ urlpatterns += patterns(
 urlpatterns += patterns(
     'contentstore.views',
 
-    url(r'^$', 'howitworks', name='homepage'),
+    url(r'^$', 'login_page', name='homepage'),
+
     url(r'^howitworks$', 'howitworks'),
     url(r'^signup$', 'signup', name='signup'),
     url(r'^signin$', 'login_page', name='login'),
