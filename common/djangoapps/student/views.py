@@ -100,7 +100,7 @@ from util.milestones_helpers import (
     get_pre_requisite_courses_not_completed,
 )
 from microsite_configuration import microsite
-
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from util.password_policy_validators import (
     validate_password_length, validate_password_complexity,
     validate_password_dictionary
@@ -1018,6 +1018,7 @@ def change_enrollment(request, check_access=True):
                 enroll_mode = CourseMode.auto_enroll_mode(course_id, available_modes)
                 if enroll_mode:
                     CourseEnrollment.enroll(user, course_id, check_access=check_access, mode=enroll_mode)
+                    send_email_after_enroll(user, course_id)  # Sends email to user on successfull enrollment
             except Exception:
                 return HttpResponseBadRequest(_("Could not enroll"))
 
@@ -2583,7 +2584,39 @@ def render_jio_cms_registration(request, idam_user_details):
     # Store user details in session in order to populate it in register.html
     request.session['user_profile'] = json.dumps(context)
     return JsonResponse({
-                        "success": False,
-                         "show_signup": True,
-                        }
-    )
+        "success": False,
+        "show_signup": True,
+    })
+
+
+# Implementation for sending email to user when he/she successfully enrolls in a course
+def send_email_after_enroll(user, course_id):
+    try:
+        course = CourseOverview.get_from_id(course_id)
+        user_profile = UserProfile.objects.get(user=user)
+        course_url = '{base_url}{course_about}'.format(
+            base_url=microsite.get_value('SITE_NAME', settings.SITE_NAME),
+            course_about=reverse('about_course', kwargs={'course_id': course_id.to_deprecated_string()})
+        )
+        context = {
+            'display_name': course.display_name or course.display_name_with_default,
+            'full_name': user_profile.name,
+            'site_name': settings.SITE_NAME,
+            'course_url': course_url
+        }
+        subject = render_to_string('emails/enroll_email_enrolledsubject.txt', context)
+        subject = ''.join(subject.splitlines())
+
+        body = render_to_string('emails/enroll_email_enrolledmessage.txt', context)
+
+        from_address = microsite.get_value(
+            'email_from_address',
+            settings.DEFAULT_FROM_EMAIL
+        )
+        user.email_user(subject, body, from_address)
+    except CourseOverview.DoesNotExit:
+        log.error(u"Course does not exit for user : %s and course id : %s", user, course_id)
+    except UserProfile.DoesNotExit:
+        log.error(u"User Profile does not exit for user : %s", user)
+    except Exception as exp:
+        log.error("Unexpected error --------- %s", exp)
