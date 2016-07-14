@@ -10,22 +10,22 @@ define(['jquery.cookie', 'utility'], function() {
                 success: callback,
             });
         }
-
         // Clear the login error message when credentials are edited
         $('input#email').on('input',function() {
             $('#login_error').removeClass('is-shown');
         });
-
         $('input#password').on('input',function() {
             $('#login_error').removeClass('is-shown');
         });
-
         $('form#login_form').submit(function(event) {
             event.preventDefault();
             var submit_data = $('#login_form').serialize();
-
             postJSON('/login_post', submit_data, function(json) {
-                if(json.success) {
+		if(json.show_signup){
+			location.href = "/signup";
+			return false;
+		}
+                else if(json.success) {
                     var next = /next=([^&]*)/g.exec(decodeURIComponent(window.location.search));
                     if (next && next.length > 1 && !isExternal(next[1])) {
                         location.href = next[1];
