@@ -1,0 +1,167 @@
+@media only screen and (max-width: 420px){
+/* Small android phones */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 55px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 432px) and (max-width: 480px){
+    /* Low-end windows phone */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 91px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 523px) and (max-width: 640px){
+    /* iPhone */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 183px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 641px) and (max-width: 768px){
+    /* High-end windows phone */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 247px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 769px) and (max-width: 800px){
+    /* Old desktops */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 260px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 801px) and (max-width: 1024px){
+    /* ipad */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 373px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        /* To left align jio logo on all the pages after user logging-in.*/
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (min-width: 1025px) and (max-width: 1680px){
+    /* Tablet/Netbook/Large (or) small desktops */
+    header.global{
+        h1.logo{
+            a{
+                img{
+                    padding: 0 0 0 471px;
+                }
+            }
+        }
+    }
+    header.global.slim{
+        h1.logo{
+            a{
+                img{
+                    padding: 0px;
+                }
+            }
+        }
+    }
+}
+
+@media only screen and (max-width: 720px){
+    div.content-wrapper{
+        section.container{
+            min-width: 0;
+        }
+    }
+}
