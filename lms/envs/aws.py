@@ -755,3 +755,6 @@ SECO_AUTHENTICATION = {}
 ENV_SECO = ENV_TOKENS.get('SECO_AUTHENTICATION', {})
 for seco, value in ENV_SECO.items():
     SECO_AUTHENTICATION[seco] = value
+
+# Enable organizations app
+FEATURES['ORGANIZATIONS_APP'] = True
